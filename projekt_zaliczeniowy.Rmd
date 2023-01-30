@@ -1,0 +1,164 @@
+---
+title: "Opracowanie statystyczne działania algorytmów minimalizacji stochastycznej"
+author: "Krzysztof Solecki, Paweł Jaśkowiec"
+output: pdf_document
+date: "2023-01-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tytuł projektu: Rachunek Prawdopodobieństwa i Statystyka - Projekt Zaliczeniowy 2022/23
+
+## Autorzy: Paweł Jaśkowiec, Krzysztof Solecki
+
+## Opis:
+
+## Projekt polega na prostym opracowaniu statystycznym wyników porównania działania wybranych algorytmów minimalizacji stochastycznej. W naszym przypadku dotyczy to algorytmu poszukiwania przypadkowego PRS (Pure Random Search) oraz Algorytmu Genetycznego (GA).
+
+```{r}
+library(smoof)
+library(GA)
+library(vioplot)
+```
+
+#### Do porównania algorytmów PRS i GA użyjemy dwóch funkcji dostępnych w bibliotece smoof: Rastrigina i Ackley'a. Są to funkcje skalarne i wielomodalne oraz akceptują parametr określający ilość wymiarów. My bedziemy analizować dla 2,10 i 20 wymiarów.
+
+```{r}
+plot(smoof::makeAckleyFunction(1))
+plot(smoof::makeRastriginFunction(1))
+```
+
+#### Poszukiwanie przypadkowe (PRS)
+
+#### Poniższa funkcja PRS przyjmuje jako argument funkcję oraz budżet obliczeniowy, czyli ilość wywołań minimalizowanej funkcji. W naszym przypadku ustalamy budżet równy 1000.
+
+```{r}
+prs <- function(f,N){
+  upper <- smoof::getUpperBoxConstraints(f)
+  lower <- smoof::getLowerBoxConstraints(f)
+  dim <- length(upper)
+  
+  return(min(replicate(N,f(runif(dim,lower[1],upper[1])))))
+}
+```
+
+#### Algorytm Genetyczny (GA)
+
+#### Poniższa funkcja ga_min została napisana z użyciem funkcji ga z biblioteki GA, która wyznacza maksimum przekazanej funkcji. Została ona zmodyfikowana tak, aby wyznaczała minimum funkcji. Parametr maxIter został ustawiony na 20, ponieważ dla każdej iteracji domyślnie algorytm przyjmuje Population Size = 50, co oznacza, że dla jednej iteracji znajduje 50 rozwiązań, a skoro nasz narzucony budżet wynosi 1000 to możemy wykonać dokładnie 20 takich iteracji.
+
+```{r}
+ga_min <- function(f){
+  
+  res <- GA::ga(type="real-valued",
+                fitness = function(x) -1*f(x),
+                lower = smoof::getLowerBoxConstraints(f),
+                upper = smoof::getUpperBoxConstraints(f),
+                maxiter = 20,
+                monitor = FALSE)
+  return((-1)*res@fitnessValue)
+}
+```
+
+#### Poniżej dokonano łącznie 6 porównań wybranych algorytmów: 3 różne liczby wymiarów dla każdej z 2 wybranych funkcji. W tym celu użyto funkcji compare, która zapisuje odpowiednio wynik funkcji prs oraz ga_min dla określonej funkcji i wymiarów. Następnie oblicza średnią, medianę, rysuje histogramy i wykresy skrzypcowe z uwzględnieniem rozproszenia wyników dla obu algorytmów.Zieloną linią zaznaczono średnią z wyników, natomiast niebieską - medianę.
+
+```{r}
+compare <- function(f){
+  prs_res <- replicate(50,prs(f,1000))
+  ga_res <- replicate(50,ga_min(f))
+  
+  mean(prs_res)
+  mean(ga_res)
+  
+  hist(prs_res)
+  abline(v = median(prs_res),col = "blue")
+  abline(v = mean(prs_res), col = "green")
+  
+  hist(ga_res)
+  abline(v = median(ga_res),col = "blue")
+  abline(v = mean(ga_res),col = "green")
+  
+  vioplot::vioplot(prs_res)
+  stripchart(prs_res, method = "jitter", col = "blue",
+             vertical = TRUE, pch = 19, add = TRUE)
+  
+  vioplot::vioplot(ga_res)
+  stripchart(ga_res, method = "jitter", col = "blue",
+             vertical = TRUE, pch = 19, add = TRUE)
+}
+```
+
+##### Funkcja Ackleya, liczba wymiarów: 2
+
+```{r}
+compare(smoof::makeAckleyFunction(2))
+```
+
+##### Funkcja Ackleya, liczba wymiarów: 10
+
+```{r}
+compare(smoof::makeAckleyFunction(10))
+```
+
+##### Funkcja Ackleya, liczba wymiarów: 20
+
+```{r}
+compare(smoof::makeAckleyFunction(20))
+```
+
+##### Funkcja Rastrigina, liczba wymiarów: 2
+
+```{r}
+compare(smoof::makeRastriginFunction(2))
+```
+
+##### Funkcja Rastrigina, liczba wymiarów: 10
+
+```{r}
+compare(smoof::makeRastriginFunction(10))
+```
+
+##### Funkcja Rastrigina, liczba wymiarów: 20
+
+```{r}
+compare(smoof::makeRastriginFunction(20))
+```
+
+##### Można zauważyć, że algorytm genetyczny wyznacza minimum bliższe wartości rzeczywistej (0) w porównaniu do algorytmu PRS dla jednakowej liczby wywołań minimalizowanej funkcji. Ponadto dla 2 wymiarów wyniki zwracane przez algorytm genetyczny mają niewielki rozrzut i są silnie skoncentrowane wokół wartości średniej niezależnie od testowanej funkcji. W przypadku algorytmu PRS niezależnie od liczby wymiarów wyniki mają duży rozrzut, a ich rozkład jest w przybliżeniu symetryczny względem wartości średniej, zwłaszcza dla liczby wymiarów większej od 2.
+
+##### Analiza istotności statystycznej różnicy między średnim wynikiem obu algorytmów
+
+```{r}
+prs_2_ackley <- replicate(50,prs(smoof::makeAckleyFunction(2),1000))
+ga_2_ackley <- replicate(50,ga_min(smoof::makeAckleyFunction(2)))
+
+t.test(prs_2_ackley,ga_2_ackley)
+
+prs_10_ackley <- replicate(50,prs(smoof::makeAckleyFunction(10),1000))
+ga_10_ackley <- replicate(50,ga_min(smoof::makeAckleyFunction(10)))
+
+t.test(prs_10_ackley,ga_10_ackley)
+
+prs_20_ackley <- replicate(50,prs(smoof::makeAckleyFunction(20),1000))
+ga_20_ackley <- replicate(50,ga_min(smoof::makeAckleyFunction(20)))
+
+t.test(prs_20_ackley,ga_20_ackley)
+
+prs_2_rastrigin <- replicate(50,prs(smoof::makeRastriginFunction(2),1000))
+ga_2_rastrigin <- replicate(50,ga_min(smoof::makeRastriginFunction(2)))
+
+t.test(prs_2_rastrigin,ga_2_rastrigin)
+
+prs_10_rastrigin <- replicate(50,prs(smoof::makeRastriginFunction(10),1000))
+ga_10_rastrigin <- replicate(50,ga_min(smoof::makeRastriginFunction(10)))
+
+t.test(prs_10_rastrigin,ga_10_rastrigin)
+
+prs_20_rastrigin <- replicate(50,prs(smoof::makeRastriginFunction(20),1000))
+ga_20_rastrigin <- replicate(50,ga_min(smoof::makeRastriginFunction(20)))
+
+t.test(prs_20_rastrigin,ga_20_rastrigin)
+```
+
+##### Widać, iż w każdym porównaniu p-wartość jest znacznie mniejsza od 0.05, zatem należy odrzucić hipotezę iż średnie wartości wyników zwracanych przez oba algorytmu są równe. W takim razie istnieje statystycznie istotnia różnica między tymi algorytmami na korzyść algorytmu genetycznego, który zwraca wartości bliższe rzeczywistej wartości minimalnej danych funkcji.
